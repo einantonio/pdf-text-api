@@ -1,5 +1,6 @@
-Flask
+flask
 flask-cors
 requests
-PyMuPDF
-gunicorn
+pdfminer.six
+PyPDF2
+mammoth
