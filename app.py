@@ -1,9 +1,12 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
-import fitz  # PyMuPDF
 import io
 import os
+from pdfminer.high_level import extract_text
+from pdfminer.pdfparser import PDFSyntaxError
+import mammoth
+import PyPDF2
 
 app = Flask(__name__)
 CORS(app)
@@ -12,8 +15,8 @@ CORS(app)
 def health_check():
     return jsonify({"status": "ok"}), 200
 
-@app.route('/extract-pdf', methods=['POST'])
-def extract_pdf():
+@app.route('/extract-file', methods=['POST'])
+def extract_file():
     data = request.get_json()
     url = data.get('url')
 
@@ -24,26 +27,42 @@ def extract_pdf():
         response = requests.get(url)
         response.raise_for_status()
 
-        pdf_stream = io.BytesIO(response.content)
-        doc = fitz.open(stream=pdf_stream, filetype="pdf")
+        file_content = io.BytesIO(response.content)
+        content_type = response.headers.get('Content-Type', '').lower()
 
-        text = ""
-        for page in doc:
-            text += page.get_text()
+        if 'application/pdf' in content_type or url.endswith('.pdf'):
+            # Usamos PyPDF2 para contar páginas
+            pdf_reader = PyPDF2.PdfReader(file_content)
+            num_pages = len(pdf_reader.pages)
+            file_content.seek(0)  # Reset stream para extracción de texto
+            text = extract_text(file_content)
+            file_type = 'pdf'
+            stats = {"pages": num_pages}
+        
+        elif 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type or url.endswith('.docx'):
+            result = mammoth.extract_raw_text(file_content)
+            text = result.value
+            file_type = 'docx'
+            word_count = len(text.split())
+            stats = {"words": word_count}
+        
+        else:
+            return jsonify({"error": "Unsupported file type"}), 400
 
-        result = {
-            "text": text,
+        return jsonify({
+            "text": text.strip(),
             "info": {
-                "pages": len(doc),
-                "version": doc.metadata.get('format', 'unknown')
+                "type": file_type,
+                **stats,
+                "length": len(text)
             }
-        }
-        return jsonify(result)
+        })
     
+    except PDFSyntaxError:
+        return jsonify({"error": "Invalid PDF file"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
