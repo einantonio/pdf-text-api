@@ -4,3 +4,4 @@ requests
 pdfminer.six
 PyPDF2
 mammoth
+gunicorn
