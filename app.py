@@ -101,7 +101,9 @@ def extract_file():
 #Extraccion de texto vacantes
 from bs4 import BeautifulSoup
 import time
-APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Reemplaza con tu token real
+import requests
+
+APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Sustituye por tu token real
 
 @app.route('/extract-job-text', methods=['POST'])
 def extract_job_text():
@@ -112,10 +114,14 @@ def extract_job_text():
         return jsonify({"error": "URL is required"}), 400
 
     try:
-        if any(domain in url for domain in ["linkedin.com", "indeed.com", "glassdoor.com", "computrabajo.com", "occ.com.mx"]):
-            return jsonify({"source": "apify", "text": extract_with_apify(url)})
+        # Si es sitio dinámico, usa Apify
+        if any(domain in url for domain in [
+            "linkedin.com", "indeed.com", "glassdoor.com", "computrabajo.com", "occ.com.mx"
+        ]):
+            extracted_text = extract_with_apify(url)
+            return jsonify({"source": "apify", "text": extracted_text})
 
-        # BeautifulSoup fallback (HTML estático como OCC)
+        # Si es HTML simple, usa BeautifulSoup
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, "html.parser")
@@ -128,6 +134,7 @@ def extract_job_text():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 def extract_with_apify(url):
     try:
@@ -143,7 +150,8 @@ def extract_with_apify(url):
             }
         }
 
-        run_response = requests.post(start_run_url, json=payload)
+        # Inicia el run de Apify
+        run_response = requests.post(run_url, json=payload)
         run_response.raise_for_status()
         run_data = run_response.json()
         run_id = run_data.get("data", {}).get("id")
@@ -151,9 +159,9 @@ def extract_with_apify(url):
         if not run_id:
             return "Error: no run ID returned."
 
-        # Esperar hasta que el run termine
+        # Espera a que el run termine
         status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_TOKEN}"
-        for _ in range(20):  # espera hasta ~20s
+        for _ in range(20):  # Espera hasta ~30s máx
             time.sleep(1.5)
             status_response = requests.get(status_url)
             status_data = status_response.json()
@@ -163,7 +171,7 @@ def extract_with_apify(url):
         else:
             return "Error: Apify run did not finish in time."
 
-        # Obtener dataset
+        # Recupera el dataset generado
         dataset_id = status_data.get("data", {}).get("defaultDatasetId")
         if not dataset_id:
             return "Error: no dataset ID found."
@@ -176,7 +184,7 @@ def extract_with_apify(url):
         if not dataset_items:
             return "Error: dataset is empty."
 
-        # Extraer el texto (puede venir en diferentes campos)
+        # Extrae contenido
         text_parts = []
         for item in dataset_items:
             content = item.get("text") or item.get("html") or item.get("markdown") or ""
@@ -187,6 +195,7 @@ def extract_with_apify(url):
 
     except Exception as e:
         return f"Error al usar Apify: {str(e)}"
+
 
 
 
