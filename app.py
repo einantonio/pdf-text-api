@@ -138,18 +138,16 @@ def extract_job_text():
 
 def extract_with_apify(url):
     try:
-        actor_id = "apify~website-content-extractor"
-        run_url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={APIFY_TOKEN}"
+        task_id = "6hTBPhkVAV9z6wSlU"  # Task ID real
+        run_url = f"https://api.apify.com/v2/actor-tasks/{task_id}/runs?token={APIFY_TOKEN}"
 
         payload = {
             "input": {
-                "startUrls": [{"url": url}],
-                "proxyConfiguration": {"useApifyProxy": True},
-                "maxDepth": 1
+                "startUrls": [{"url": url}]
             }
         }
 
-        # Inicia run
+        # Ejecuta el task
         run_response = requests.post(run_url, json=payload)
         run_response.raise_for_status()
         run_data = run_response.json()
@@ -158,9 +156,9 @@ def extract_with_apify(url):
         if not run_id:
             return "Error: no run ID returned."
 
-        # Poll hasta que termine
+        # Esperar a que el run termine (polling)
         status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_TOKEN}"
-        for _ in range(20):
+        for _ in range(20):  # ~30 segundos
             time.sleep(1.5)
             status_response = requests.get(status_url)
             status_data = status_response.json()
@@ -170,11 +168,8 @@ def extract_with_apify(url):
         else:
             return "Error: Apify run did not finish in time."
 
-        # Obtener dataset
+        # Descargar dataset
         dataset_id = status_data.get("data", {}).get("defaultDatasetId")
-        if not dataset_id:
-            return "Error: no dataset ID found."
-
         dataset_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?token={APIFY_TOKEN}&format=json"
         dataset_response = requests.get(dataset_url)
         dataset_response.raise_for_status()
@@ -183,10 +178,10 @@ def extract_with_apify(url):
         if not dataset_items:
             return "Error: dataset is empty."
 
-        # Usar el campo 'text' o 'html' como contenido
+        # Extraer contenido útil
         text_parts = []
         for item in dataset_items:
-            content = item.get("text") or item.get("html") or ""
+            content = item.get("text") or item.get("html") or item.get("markdown") or ""
             text_parts.append(content)
 
         combined_text = " ".join(text_parts)
@@ -194,7 +189,6 @@ def extract_with_apify(url):
 
     except Exception as e:
         return f"Error al usar Apify: {str(e)}"
-
 
 
 
