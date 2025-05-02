@@ -112,7 +112,7 @@ def extract_job_text():
         return jsonify({"error": "URL is required"}), 400
 
     try:
-        if any(domain in url for domain in ["linkedin.com", "indeed.com", "glassdoor.com", "computrabajo.com"]):
+        if any(domain in url for domain in ["linkedin.com", "indeed.com", "glassdoor.com", "computrabajo.com", "occ.com.mx"]):
             return jsonify({"source": "apify", "text": extract_with_apify(url)})
 
         # BeautifulSoup fallback (HTML estático como OCC)
