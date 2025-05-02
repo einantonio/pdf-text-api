@@ -138,19 +138,18 @@ def extract_job_text():
 
 def extract_with_apify(url):
     try:
-        actor_id = "apify~website-content-crawler"
+        actor_id = "apify~website-content-extractor"
         run_url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={APIFY_TOKEN}"
 
         payload = {
             "input": {
                 "startUrls": [{"url": url}],
-                "maxPagesPerCrawl": 1,
-                "crawlerType": "cheerio",
-                "proxyConfiguration": {"useApifyProxy": True}
+                "proxyConfiguration": {"useApifyProxy": True},
+                "maxDepth": 1
             }
         }
 
-        # Inicia el run de Apify
+        # Inicia run
         run_response = requests.post(run_url, json=payload)
         run_response.raise_for_status()
         run_data = run_response.json()
@@ -159,9 +158,9 @@ def extract_with_apify(url):
         if not run_id:
             return "Error: no run ID returned."
 
-        # Espera a que el run termine
+        # Poll hasta que termine
         status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_TOKEN}"
-        for _ in range(20):  # Espera hasta ~30s máx
+        for _ in range(20):
             time.sleep(1.5)
             status_response = requests.get(status_url)
             status_data = status_response.json()
@@ -171,7 +170,7 @@ def extract_with_apify(url):
         else:
             return "Error: Apify run did not finish in time."
 
-        # Recupera el dataset generado
+        # Obtener dataset
         dataset_id = status_data.get("data", {}).get("defaultDatasetId")
         if not dataset_id:
             return "Error: no dataset ID found."
@@ -184,14 +183,14 @@ def extract_with_apify(url):
         if not dataset_items:
             return "Error: dataset is empty."
 
-        # Extrae contenido
+        # Usar el campo 'text' o 'html' como contenido
         text_parts = []
         for item in dataset_items:
-            content = item.get("text") or item.get("html") or item.get("markdown") or ""
+            content = item.get("text") or item.get("html") or ""
             text_parts.append(content)
 
         combined_text = " ".join(text_parts)
-        return ' '.join(combined_text.split())[:10000]  # limpieza básica
+        return ' '.join(combined_text.split())[:10000]
 
     except Exception as e:
         return f"Error al usar Apify: {str(e)}"
