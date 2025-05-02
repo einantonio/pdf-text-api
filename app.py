@@ -38,8 +38,12 @@ def extract_file():
 
         file_content = io.BytesIO(response.content)
         content_type = response.headers.get('Content-Type', '').lower()
+        url_lower = url.lower()
 
-        if 'application/pdf' in content_type or url.endswith('.pdf'):
+        print("Content-Type:", content_type)
+        print("URL:", url)
+
+        if 'application/pdf' in content_type or url_lower.endswith('.pdf'):
             pdf_reader = PyPDF2.PdfReader(file_content)
             num_pages = len(pdf_reader.pages)
             file_content.seek(0)
@@ -48,9 +52,10 @@ def extract_file():
             stats = {"pages": num_pages}
 
         elif (
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type
-    or url.lower().endswith('.docx')
-):
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type
+            or url_lower.endswith('.docx')
+            or ('application/octet-stream' in content_type and url_lower.endswith('.docx'))
+        ):
             try:
                 result = mammoth.extract_raw_text(file_content)
                 text = result.value
@@ -61,7 +66,14 @@ def extract_file():
             stats = {"words": word_count}
 
         else:
-            return jsonify({"error": "Unsupported file type"}), 400
+            print("Unsupported file type triggered")
+            return jsonify({
+                "error": "Unsupported file type",
+                "debug": {
+                    "content_type": content_type,
+                    "url": url
+                }
+            }), 400
 
         return jsonify({
             "text": text.strip(),
