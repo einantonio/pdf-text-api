@@ -6,3 +6,4 @@ PyPDF2
 mammoth
 python-docx
 gunicorn
+beautifulsoup4

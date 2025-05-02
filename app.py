@@ -100,7 +100,7 @@ def extract_file():
         return jsonify({"error": str(e)}), 500
 #Extraccion de texto vacantes
 from bs4 import BeautifulSoup
-
+import time
 APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Reemplaza con tu token real
 
 @app.route('/extract-job-text', methods=['POST'])
@@ -131,7 +131,10 @@ def extract_job_text():
 
 def extract_with_apify(url):
     try:
-        run_url = f"https://api.apify.com/v2/actor-tasks/apify/website-content-crawler/runs?token={APIFY_TOKEN}"
+        task_id = "apify/website-content-crawler"
+        start_run_url = f"https://api.apify.com/v2/actor-tasks/{task_id}/runs?token={APIFY_TOKEN}"
+        
+        # Iniciar run
         payload = {
             "input": {
                 "startUrls": [{"url": url}],
@@ -141,14 +144,50 @@ def extract_with_apify(url):
             }
         }
 
-        r = requests.post(run_url, json=payload)
-        if r.status_code == 201:
-            return "Apify run started. Check your Apify dashboard for output."
+        run_response = requests.post(start_run_url, json=payload)
+        run_response.raise_for_status()
+        run_data = run_response.json()
+        run_id = run_data.get("data", {}).get("id")
+
+        if not run_id:
+            return "Error: no run ID returned."
+
+        # Esperar hasta que el run termine
+        status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_TOKEN}"
+        for _ in range(20):  # espera hasta ~20s
+            time.sleep(1.5)
+            status_response = requests.get(status_url)
+            status_data = status_response.json()
+            status = status_data.get("data", {}).get("status")
+            if status == "SUCCEEDED":
+                break
         else:
-            return f"Apify error: {r.text}"
+            return "Error: Apify run did not finish in time."
+
+        # Obtener dataset
+        dataset_id = status_data.get("data", {}).get("defaultDatasetId")
+        if not dataset_id:
+            return "Error: no dataset ID found."
+
+        dataset_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?token={APIFY_TOKEN}&format=json"
+        dataset_response = requests.get(dataset_url)
+        dataset_response.raise_for_status()
+        dataset_items = dataset_response.json()
+
+        if not dataset_items:
+            return "Error: dataset is empty."
+
+        # Extraer el texto (puede venir en diferentes campos)
+        text_parts = []
+        for item in dataset_items:
+            content = item.get("text") or item.get("html") or item.get("markdown") or ""
+            text_parts.append(content)
+
+        combined_text = " ".join(text_parts)
+        return ' '.join(combined_text.split())[:10000]  # limpieza básica
 
     except Exception as e:
-        return f"Error calling Apify: {str(e)}"
+        return f"Error al usar Apify: {str(e)}"
 
 
 
