@@ -131,10 +131,9 @@ def extract_job_text():
 
 def extract_with_apify(url):
     try:
-        task_id = "apify/website-content-crawler"
-        start_run_url = f"https://api.apify.com/v2/actor-tasks/{task_id}/runs?token={APIFY_TOKEN}"
-        
-        # Iniciar run
+        actor_id = "apify~website-content-crawler"
+        run_url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={APIFY_TOKEN}"
+
         payload = {
             "input": {
                 "startUrls": [{"url": url}],
