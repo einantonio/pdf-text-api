@@ -138,16 +138,19 @@ def extract_job_text():
 
 def extract_with_apify(url):
     try:
-        task_id = "6hTBPhkVAV9z6wSlU"  # Task ID real
-        run_url = f"https://api.apify.com/v2/actor-tasks/{task_id}/runs?token={APIFY_TOKEN}"
+        actor_id = "apify~website-content-crawler"
+        run_url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={APIFY_TOKEN}"
 
         payload = {
             "input": {
-                "startUrls": [{"url": url}]
+                "startUrls": [{"url": url}],
+                "maxPagesPerCrawl": 1,
+                "crawlerType": "cheerio",
+                "proxyConfiguration": {"useApifyProxy": True}
             }
         }
 
-        # Ejecuta el task
+        # Iniciar ejecución del actor
         run_response = requests.post(run_url, json=payload)
         run_response.raise_for_status()
         run_data = run_response.json()
@@ -156,9 +159,9 @@ def extract_with_apify(url):
         if not run_id:
             return "Error: no run ID returned."
 
-        # Esperar a que el run termine (polling)
+        # Polling hasta que termine
         status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_TOKEN}"
-        for _ in range(20):  # ~30 segundos
+        for _ in range(30):  # ~45 segundos máximo
             time.sleep(1.5)
             status_response = requests.get(status_url)
             status_data = status_response.json()
@@ -170,6 +173,9 @@ def extract_with_apify(url):
 
         # Descargar dataset
         dataset_id = status_data.get("data", {}).get("defaultDatasetId")
+        if not dataset_id:
+            return "Error: no dataset ID found."
+
         dataset_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?token={APIFY_TOKEN}&format=json"
         dataset_response = requests.get(dataset_url)
         dataset_response.raise_for_status()
@@ -178,7 +184,7 @@ def extract_with_apify(url):
         if not dataset_items:
             return "Error: dataset is empty."
 
-        # Extraer contenido útil
+        # Extraer texto
         text_parts = []
         for item in dataset_items:
             content = item.get("text") or item.get("html") or item.get("markdown") or ""
