@@ -98,6 +98,59 @@ def extract_file():
         return jsonify({"error": "Invalid PDF file"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+#Extraccion de texto vacantes
+from bs4 import BeautifulSoup
+
+APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Reemplaza con tu token real
+
+@app.route('/extract-job-text', methods=['POST'])
+def extract_job_text():
+    data = request.get_json()
+    url = data.get("url")
+
+    if not url:
+        return jsonify({"error": "URL is required"}), 400
+
+    try:
+        if any(domain in url for domain in ["linkedin.com", "indeed.com", "glassdoor.com", "computrabajo.com"]):
+            return jsonify({"source": "apify", "text": extract_with_apify(url)})
+
+        # BeautifulSoup fallback (HTML estático como OCC)
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "header", "noscript", "form"]):
+            tag.extract()
+
+        text = soup.get_text(separator=' ', strip=True)
+        clean = ' '.join(text.split())
+        return jsonify({"source": "beautifulsoup", "text": clean[:10000]})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+def extract_with_apify(url):
+    try:
+        run_url = f"https://api.apify.com/v2/actor-tasks/apify/website-content-crawler/runs?token={APIFY_TOKEN}"
+        payload = {
+            "input": {
+                "startUrls": [{"url": url}],
+                "maxPagesPerCrawl": 1,
+                "crawlerType": "cheerio",
+                "proxyConfiguration": {"useApifyProxy": True}
+            }
+        }
+
+        r = requests.post(run_url, json=payload)
+        if r.status_code == 201:
+            return "Apify run started. Check your Apify dashboard for output."
+        else:
+            return f"Apify error: {r.text}"
+
+    except Exception as e:
+        return f"Error calling Apify: {str(e)}"
+
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
