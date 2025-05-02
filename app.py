@@ -47,7 +47,10 @@ def extract_file():
             file_type = 'pdf'
             stats = {"pages": num_pages}
 
-        elif 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type or url.endswith('.docx'):
+        elif (
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type
+    or url.lower().endswith('.docx')
+):
             try:
                 result = mammoth.extract_raw_text(file_content)
                 text = result.value
