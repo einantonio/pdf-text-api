@@ -3,6 +3,7 @@ from flask_cors import CORS
 import requests
 import io
 import os
+import zipfile
 from pdfminer.high_level import extract_text
 from pdfminer.pdfparser import PDFSyntaxError
 import mammoth
@@ -19,6 +20,14 @@ def fallback_docx(file_content):
         return "\n".join([p.text for p in doc.paragraphs])
     except Exception as e:
         raise ValueError(f"Fallback DOCX parsing failed: {str(e)}")
+
+def is_docx_zip(file_content):
+    file_content.seek(0)
+    try:
+        with zipfile.ZipFile(file_content) as z:
+            return 'word/document.xml' in z.namelist()
+    except zipfile.BadZipFile:
+        return False
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -54,9 +63,10 @@ def extract_file():
         elif (
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type
             or url_lower.endswith('.docx')
-            or ('application/octet-stream' in content_type and url_lower.endswith('.docx'))
+            or is_docx_zip(file_content)
         ):
             try:
+                file_content.seek(0)
                 result = mammoth.extract_raw_text(file_content)
                 text = result.value
             except Exception:
