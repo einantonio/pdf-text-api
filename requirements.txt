@@ -4,5 +4,5 @@ requests
 pdfminer.six
 PyPDF2
 mammoth
-gunicorn
 python-docx
+gunicorn
