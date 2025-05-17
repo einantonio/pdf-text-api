@@ -207,15 +207,22 @@ def extract_with_apify(url):
             html_content = item.get("html", "")
             if html_content:
                 soup = BeautifulSoup(html_content, "html.parser")
+
+                # 1. Buscar en <h1> y <title>
                 job_title_tag = soup.find("h1") or soup.find("title")
+
+                # 2. Buscar en <p> con clase que contiene "title" (para OCC)
+                if not job_title_tag:
+                    job_title_tag = soup.find("p", class_=lambda c: c and "title" in c.lower())
+
                 if job_title_tag:
                     job_title = job_title_tag.get_text(strip=True)
-                    break
+                    break  # Si encontramos el título, terminamos la búsqueda
 
         combined_text = " ".join(text_parts)
         cleaned_text = ' '.join(combined_text.split())[:10000]
 
-        # Si no se encontró en HTML, buscar en el texto plano
+        # 3. Si no encontramos en HTML, buscar en texto plano como último recurso
         if not job_title and cleaned_text:
             match = re.search(r"(?:Puesto|Vacante|Tipo de puesto):\s*(.*?)(\.|\n|$)", cleaned_text, re.IGNORECASE)
             if match:
@@ -228,7 +235,6 @@ def extract_with_apify(url):
 
     except Exception as e:
         return {"error": f"Error al usar Apify: {str(e)}"}
-
 
 
 
