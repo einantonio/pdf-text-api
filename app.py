@@ -152,7 +152,10 @@ def extract_with_apify_route():
     extracted_result = extract_with_apify(url)
     return jsonify({"source": "apify", **extracted_result})
 
+import re
+
 def extract_with_apify(url):
+    
     try:
         task_id = "6hTBPhkVAV9z6wSlU"
         run_url = f"https://api.apify.com/v2/actor-tasks/{task_id}/runs?token={APIFY_TOKEN}"
@@ -222,10 +225,38 @@ def extract_with_apify(url):
     except Exception as e:
         return {"error": f"Error al usar Apify: {str(e)}"}
 
-if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+text_parts = []
+        job_title = ""
+
+        for item in dataset_items:
+            content = item.get("text") or item.get("html") or item.get("markdown") or ""
+            text_parts.append(content)
+
+            html_content = item.get("html", "")
+            if html_content:
+                soup = BeautifulSoup(html_content, "html.parser")
+                job_title_tag = soup.find("h1") or soup.find("title")
+                if job_title_tag:
+                    job_title = job_title_tag.get_text(strip=True)
+                    break  # Si se encuentra, no seguir buscando
+
+        combined_text = " ".join(text_parts)
+        cleaned_text = ' '.join(combined_text.split())[:10000]
+
+        # Si no encontramos título en HTML, intentamos inferirlo desde el texto plano
+        if not job_title and cleaned_text:
+            # Busca "Puesto: ..." o "Tipo de puesto: ..." y extrae el valor
+            match = re.search(r"(?:Puesto|Tipo de puesto):\s*(.*?)(\.|$)", cleaned_text, re.IGNORECASE)
+            if match:
+                job_title = match.group(1).strip()
+
+        return {
+            "text": cleaned_text,
+            "job_title": job_title or "No especificado"
+        }
+
+    except Exception as e:
+        return {"error": f"Error al usar Apify: {str(e)}"}
 
 
 
