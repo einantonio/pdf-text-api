@@ -98,12 +98,12 @@ def extract_file():
         return jsonify({"error": "Invalid PDF file"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 #Extraccion de texto vacantes
-from flask import Flask, request, jsonify
-from flask_cors import CORS
 from bs4 import BeautifulSoup
 import time
 import requests
+import re
 
 APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Reemplaza con tu token real
 
@@ -127,7 +127,6 @@ def extract_job_text():
             extracted_result = extract_with_apify(url)
             return jsonify({"source": "apify", **extracted_result})
 
-        # HTML simple - BeautifulSoup
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, "html.parser")
@@ -136,7 +135,7 @@ def extract_job_text():
 
         text = soup.get_text(separator=' ', strip=True)
         clean = ' '.join(text.split())
-        return jsonify({"source": "beautifulsoup", "text": clean[:10000]})
+        return jsonify({"source": "beautifulsoup", "text": clean[:10000], "job_title": "No especificado"})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -152,10 +151,7 @@ def extract_with_apify_route():
     extracted_result = extract_with_apify(url)
     return jsonify({"source": "apify", **extracted_result})
 
-import re
-
 def extract_with_apify(url):
-    
     try:
         task_id = "6hTBPhkVAV9z6wSlU"
         run_url = f"https://api.apify.com/v2/actor-tasks/{task_id}/runs?token={APIFY_TOKEN}"
@@ -217,36 +213,11 @@ def extract_with_apify(url):
                     break
 
         combined_text = " ".join(text_parts)
-        return {
-            "text": ' '.join(combined_text.split())[:10000],
-            "job_title": job_title or "No especificado"
-        }
-
-    except Exception as e:
-        return {"error": f"Error al usar Apify: {str(e)}"}
-
-text_parts = []
-        job_title = ""
-
-        for item in dataset_items:
-            content = item.get("text") or item.get("html") or item.get("markdown") or ""
-            text_parts.append(content)
-
-            html_content = item.get("html", "")
-            if html_content:
-                soup = BeautifulSoup(html_content, "html.parser")
-                job_title_tag = soup.find("h1") or soup.find("title")
-                if job_title_tag:
-                    job_title = job_title_tag.get_text(strip=True)
-                    break  # Si se encuentra, no seguir buscando
-
-        combined_text = " ".join(text_parts)
         cleaned_text = ' '.join(combined_text.split())[:10000]
 
-        # Si no encontramos título en HTML, intentamos inferirlo desde el texto plano
+        # Si no se encontró en HTML, buscar en el texto plano
         if not job_title and cleaned_text:
-            # Busca "Puesto: ..." o "Tipo de puesto: ..." y extrae el valor
-            match = re.search(r"(?:Puesto|Tipo de puesto):\s*(.*?)(\.|$)", cleaned_text, re.IGNORECASE)
+            match = re.search(r"(?:Puesto|Vacante|Tipo de puesto):\s*(.*?)(\.|\n|$)", cleaned_text, re.IGNORECASE)
             if match:
                 job_title = match.group(1).strip()
 
@@ -257,6 +228,7 @@ text_parts = []
 
     except Exception as e:
         return {"error": f"Error al usar Apify: {str(e)}"}
+
 
 
 
