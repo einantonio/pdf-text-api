@@ -100,6 +100,7 @@ def extract_file():
         return jsonify({"error": str(e)}), 500
 
 #Extraccion de texto vacantes
+
 from bs4 import BeautifulSoup
 import time
 import requests
@@ -192,50 +193,7 @@ def extract_with_apify(url):
         dataset_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?token={APIFY_TOKEN}&format=json"
         dataset_response = requests.get(dataset_url)
         dataset_response.raise_for_status()
-        dataset_items = dataset_response.json()
-
-        if not dataset_items:
-            return {"error": "Dataset is empty."}
-
-        text_parts = []
-        job_title = ""
-
-        for item in dataset_items:
-            content = item.get("text") or item.get("html") or item.get("markdown") or ""
-            text_parts.append(content)
-
-            html_content = item.get("html", "")
-            if html_content:
-                soup = BeautifulSoup(html_content, "html.parser")
-
-                # 1. Buscar en <h1> y <title>
-                job_title_tag = soup.find("h1") or soup.find("title")
-
-                # 2. Buscar en <p> con clase que contiene "title" (para OCC)
-                if not job_title_tag:
-                    job_title_tag = soup.find("p", class_=lambda c: c and "title" in c.lower())
-
-                if job_title_tag:
-                    job_title = job_title_tag.get_text(strip=True)
-                    break  # Si encontramos el título, terminamos la búsqueda
-
-        combined_text = " ".join(text_parts)
-        cleaned_text = ' '.join(combined_text.split())[:10000]
-
-        # 3. Si no encontramos en HTML, buscar en texto plano como último recurso
-        if not job_title and cleaned_text:
-            match = re.search(r"(?:Puesto|Vacante|Tipo de puesto):\s*(.*?)(\.|\n|$)", cleaned_text, re.IGNORECASE)
-            if match:
-                job_title = match.group(1).strip()
-
-        return {
-            "text": cleaned_text,
-            "job_title": job_title or "No especificado"
-        }
-
-    except Exception as e:
-        return {"error": f"Error al usar Apify: {str(e)}"}
-
+        dataset_items = dataset_response
 
 
 if __name__ == "__main__":
