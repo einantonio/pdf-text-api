@@ -99,6 +99,59 @@ def extract_file():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 #Extraccion de texto vacantes
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from bs4 import BeautifulSoup
+import time
+import requests
+
+APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Reemplaza con tu token real
+
+app = Flask(__name__)
+CORS(app)
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "ok"}), 200
+
+@app.route('/extract-job-text', methods=['POST'])
+def extract_job_text():
+    data = request.get_json()
+    url = data.get("url")
+
+    if not url:
+        return jsonify({"error": "URL is required"}), 400
+
+    try:
+        if any(domain in url for domain in ["linkedin.com", "indeed.com", "glassdoor.com", "computrabajo.com", "occ.com.mx"]):
+            extracted_result = extract_with_apify(url)
+            return jsonify({"source": "apify", **extracted_result})
+
+        # HTML simple - BeautifulSoup
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "header", "noscript", "form"]):
+            tag.extract()
+
+        text = soup.get_text(separator=' ', strip=True)
+        clean = ' '.join(text.split())
+        return jsonify({"source": "beautifulsoup", "text": clean[:10000]})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/extract_with_apify', methods=['POST'])
+def extract_with_apify_route():
+    data = request.get_json()
+    url = data.get("url")
+
+    if not url:
+        return jsonify({"error": "URL is required"}), 400
+
+    extracted_result = extract_with_apify(url)
+    return jsonify({"source": "apify", **extracted_result})
+
 def extract_with_apify(url):
     try:
         task_id = "6hTBPhkVAV9z6wSlU"
@@ -145,7 +198,6 @@ def extract_with_apify(url):
         if not dataset_items:
             return {"error": "Dataset is empty."}
 
-        # Extraer texto y posible título de la vacante
         text_parts = []
         job_title = ""
 
@@ -153,17 +205,13 @@ def extract_with_apify(url):
             content = item.get("text") or item.get("html") or item.get("markdown") or ""
             text_parts.append(content)
 
-            # Buscar título en el HTML si existe
             html_content = item.get("html", "")
             if html_content:
                 soup = BeautifulSoup(html_content, "html.parser")
-                # Intenta obtener de <h1> o <title>
-                job_title = soup.find("h1")
-                if not job_title:
-                    job_title = soup.find("title")
-                if job_title:
-                    job_title = job_title.get_text(strip=True)
-                    break  # Una vez que lo encuentras, no sigas buscando
+                job_title_tag = soup.find("h1") or soup.find("title")
+                if job_title_tag:
+                    job_title = job_title_tag.get_text(strip=True)
+                    break
 
         combined_text = " ".join(text_parts)
         return {
@@ -174,6 +222,10 @@ def extract_with_apify(url):
     except Exception as e:
         return {"error": f"Error al usar Apify: {str(e)}"}
 
+if __name__ == "__main__":
+    import os
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
 
 
 
