@@ -99,43 +99,6 @@ def extract_file():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 #Extraccion de texto vacantes
-from bs4 import BeautifulSoup
-import time
-import requests
-
-APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Sustituye por tu token real
-
-@app.route('/extract-job-text', methods=['POST'])
-def extract_job_text():
-    data = request.get_json()
-    url = data.get("url")
-
-    if not url:
-        return jsonify({"error": "URL is required"}), 400
-
-    try:
-        # Si es sitio dinámico, usa Apify
-        if any(domain in url for domain in [
-            "linkedin.com", "indeed.com", "glassdoor.com", "computrabajo.com", "occ.com.mx"
-        ]):
-            extracted_text = extract_with_apify(url)
-            return jsonify({"source": "apify", "text": extracted_text})
-
-        # Si es HTML simple, usa BeautifulSoup
-        headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header", "noscript", "form"]):
-            tag.extract()
-
-        text = soup.get_text(separator=' ', strip=True)
-        clean = ' '.join(text.split())
-        return jsonify({"source": "beautifulsoup", "text": clean[:10000]})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 def extract_with_apify(url):
     try:
         task_id = "6hTBPhkVAV9z6wSlU"
@@ -148,21 +111,19 @@ def extract_with_apify(url):
                 "crawlerType": "cheerio",
                 "proxyConfiguration": {"useApifyProxy": True}
             },
-            "build": "latest"  # <- esto permite sobreescribir input del task
+            "build": "latest"
         }
 
-        # Ejecutar el Task
         run_response = requests.post(run_url, json=payload)
         run_response.raise_for_status()
         run_data = run_response.json()
         run_id = run_data.get("data", {}).get("id")
 
         if not run_id:
-            return "Error: no run ID returned."
+            return {"error": "No run ID returned."}
 
-        # Polling hasta terminar
         status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_TOKEN}"
-        for _ in range(30):  # ~45s
+        for _ in range(30):
             time.sleep(1.5)
             status_response = requests.get(status_url)
             status_data = status_response.json()
@@ -170,12 +131,11 @@ def extract_with_apify(url):
             if status == "SUCCEEDED":
                 break
         else:
-            return "Error: Apify run did not finish in time."
+            return {"error": "Apify run did not finish in time."}
 
-        # Obtener dataset
         dataset_id = status_data.get("data", {}).get("defaultDatasetId")
         if not dataset_id:
-            return "Error: no dataset ID found."
+            return {"error": "No dataset ID found."}
 
         dataset_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?token={APIFY_TOKEN}&format=json"
         dataset_response = requests.get(dataset_url)
@@ -183,20 +143,36 @@ def extract_with_apify(url):
         dataset_items = dataset_response.json()
 
         if not dataset_items:
-            return "Error: dataset is empty."
+            return {"error": "Dataset is empty."}
 
-        # Extraer texto útil
+        # Extraer texto y posible título de la vacante
         text_parts = []
+        job_title = ""
+
         for item in dataset_items:
             content = item.get("text") or item.get("html") or item.get("markdown") or ""
             text_parts.append(content)
 
+            # Buscar título en el HTML si existe
+            html_content = item.get("html", "")
+            if html_content:
+                soup = BeautifulSoup(html_content, "html.parser")
+                # Intenta obtener de <h1> o <title>
+                job_title = soup.find("h1")
+                if not job_title:
+                    job_title = soup.find("title")
+                if job_title:
+                    job_title = job_title.get_text(strip=True)
+                    break  # Una vez que lo encuentras, no sigas buscando
+
         combined_text = " ".join(text_parts)
-        return ' '.join(combined_text.split())[:10000]
+        return {
+            "text": ' '.join(combined_text.split())[:10000],
+            "job_title": job_title or "No especificado"
+        }
 
     except Exception as e:
-        return f"Error al usar Apify: {str(e)}"
-
+        return {"error": f"Error al usar Apify: {str(e)}"}
 
 
 
