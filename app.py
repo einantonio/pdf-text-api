@@ -100,14 +100,13 @@ def extract_file():
         return jsonify({"error": str(e)}), 500
 
 #Extraccion de texto vacantes
-
-
 from bs4 import BeautifulSoup
 import time
 import requests
 import re
+import os
 
-APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Reemplaza con tu token real
+APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Coloca tu token real
 
 app = Flask(__name__)
 CORS(app)
@@ -129,6 +128,7 @@ def extract_job_text():
             extracted_result = extract_with_apify(url)
             return jsonify({"source": "apify", **extracted_result})
 
+        # Fallback BeautifulSoup
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, "html.parser")
@@ -159,6 +159,9 @@ def extract_with_apify_route():
 
 def extract_with_apify(url):
     try:
+        if not APIFY_TOKEN or "apify_api_" not in APIFY_TOKEN:
+            return {"error": "Apify token no válido o no configurado."}
+
         actor_id = "apify/web-scraper"
         run_url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={APIFY_TOKEN}"
 
@@ -166,15 +169,21 @@ def extract_with_apify(url):
             "input": {
                 "startUrls": [{"url": url}],
                 "maxPagesPerCrawl": 1,
-                "crawlerType": "puppeteer",  # Usa Puppeteer para manejar JS dinámico
+                "crawlerType": "puppeteer",
                 "proxyConfiguration": {"useApifyProxy": True},
                 "pageFunction": """
                     async function pageFunction(context) {
                         const { request, page } = context;
+                        const title = await page.title();
+                        const h1 = await page.evaluate(() => {
+                            const h1Tag = document.querySelector('h1');
+                            return h1Tag ? h1Tag.innerText : '';
+                        });
                         return {
                             url: request.url,
                             html: await page.content(),
                             text: await page.evaluate(() => document.body.innerText),
+                            extractedTitle: h1 || title
                         };
                     }
                 """
@@ -191,7 +200,7 @@ def extract_with_apify(url):
             return {"error": "No run ID returned."}
 
         status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_TOKEN}"
-        for _ in range(30):
+        for _ in range(60):  # Aumentado a 90s máximo
             time.sleep(1.5)
             status_response = requests.get(status_url)
             status_data = status_response.json()
@@ -219,29 +228,39 @@ def extract_with_apify(url):
             content = item.get("text") or item.get("html") or item.get("markdown") or ""
             text_parts.append(content)
 
+            # 1. Extraer título directo desde extractedTitle si existe
+            job_title = item.get("extractedTitle", "")
+            if job_title:
+                break
+
+            # 2. Buscar en HTML si no se encontró con extractedTitle
             html_content = item.get("html", "")
             if html_content:
                 soup = BeautifulSoup(html_content, "html.parser")
-
-                # 1. Buscar en <h1> y <title>
                 job_title_tag = soup.find("h1") or soup.find("title")
 
-                # 2. Buscar en <p> con clase que contenga "title" (para OCC)
                 if not job_title_tag:
                     job_title_tag = soup.find("p", class_=lambda c: c and any("title" in cls.lower() for cls in c.split()))
 
                 if job_title_tag:
                     job_title = job_title_tag.get_text(strip=True)
-                    break  # Título encontrado, terminamos la búsqueda
+                    break
 
         combined_text = " ".join(text_parts)
         cleaned_text = ' '.join(combined_text.split())[:10000]
 
-        # 3. Fallback: Buscar en texto plano si no se encontró en HTML
+        # 3. Fallback en texto plano
         if not job_title and cleaned_text:
-            match = re.search(r"(?:Puesto|Vacante|Tipo de puesto):\s*(.*?)(\.|\n|$)", cleaned_text, re.IGNORECASE)
-            if match:
-                job_title = match.group(1).strip()
+            lines = cleaned_text.splitlines()
+            for line in lines[:10]:
+                match = re.search(r"(?:Puesto|Vacante|Cargo|Tipo de puesto):\s*(.*)", line, re.IGNORECASE)
+                if match:
+                    job_title = match.group(1).strip()
+                    break
+
+        # Debug Logs (opcional)
+        if os.getenv("DEBUG", "false").lower() == "true":
+            print(f"Apify Run ID: {run_id}, Job Title: {job_title}, URL: {url}")
 
         return {
             "text": cleaned_text,
@@ -250,6 +269,7 @@ def extract_with_apify(url):
 
     except Exception as e:
         return {"error": f"Error al usar Apify: {str(e)}"}
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
