@@ -147,7 +147,7 @@ def extract_with_apify(url):
         if not APIFY_TOKEN or "apify_api_" not in APIFY_TOKEN:
             return {"error": "Apify token no válido o no configurado."}
 
-        actor_id = "antoniovega.mkt/extract-vacante"  # Tu actor personalizado
+        actor_id = "antoniovega.mkt~extract-vacante"  # Tu actor personalizado
         run_url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={APIFY_TOKEN}"
 
         payload = {
