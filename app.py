@@ -159,15 +159,25 @@ def extract_with_apify_route():
 
 def extract_with_apify(url):
     try:
-        task_id = "PF3D85f8rBdJo97Yq"
-        run_url = f"https://api.apify.com/v2/actor-tasks/{task_id}/runs?token={APIFY_TOKEN}"
+        actor_id = "apify/web-scraper"
+        run_url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={APIFY_TOKEN}"
 
         payload = {
             "input": {
                 "startUrls": [{"url": url}],
                 "maxPagesPerCrawl": 1,
-                "crawlerType": "cheerio",
-                "proxyConfiguration": {"useApifyProxy": True}
+                "crawlerType": "puppeteer",  # Usa Puppeteer para manejar JS dinámico
+                "proxyConfiguration": {"useApifyProxy": True},
+                "pageFunction": """
+                    async function pageFunction(context) {
+                        const { request, page } = context;
+                        return {
+                            url: request.url,
+                            html: await page.content(),
+                            text: await page.evaluate(() => document.body.innerText),
+                        };
+                    }
+                """
             },
             "build": "latest"
         }
@@ -240,8 +250,6 @@ def extract_with_apify(url):
 
     except Exception as e:
         return {"error": f"Error al usar Apify: {str(e)}"}
-
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
