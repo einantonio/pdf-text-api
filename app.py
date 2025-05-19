@@ -106,7 +106,7 @@ import requests
 import re
 import os
 
-APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Coloca tu token real
+APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Coloca tu token real aquí
 
 app = Flask(__name__)
 CORS(app)
@@ -128,7 +128,7 @@ def extract_job_text():
             extracted_result = extract_with_apify(url)
             return jsonify({"source": "apify", **extracted_result})
 
-        # Fallback BeautifulSoup
+        # Fallback a BeautifulSoup
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, "html.parser")
@@ -142,21 +142,6 @@ def extract_job_text():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/extract_with_apify', methods=['POST'])
-def extract_with_apify_route():
-    try:
-        data = request.get_json()
-        url = data.get("url")
-
-        if not url:
-            return jsonify({"error": "URL is required"}), 400
-
-        extracted_result = extract_with_apify(url)
-        return jsonify({"source": "apify", **extracted_result})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 def extract_with_apify(url):
     try:
         if not APIFY_TOKEN or "apify_api_" not in APIFY_TOKEN:
@@ -165,28 +150,29 @@ def extract_with_apify(url):
         actor_id = "apify~web-scraper"
         run_url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={APIFY_TOKEN}"
 
+        page_function_code = (
+            "async function pageFunction(context) {"
+            "const { request, page } = context;"
+            "const title = await page.title();"
+            "const h1 = await page.evaluate(() => {"
+            "const h1Tag = document.querySelector('h1');"
+            "return h1Tag ? h1Tag.innerText : '';"
+            "});"
+            "return {"
+            "url: request.url,"
+            "html: await page.content(),"
+            "text: await page.evaluate(() => document.body.innerText),"
+            "extractedTitle: h1 || title"
+            "};"
+            "}"
+        )
+
         payload = {
             "input": {
                 "startUrls": [{"url": url}],
                 "maxPagesPerCrawl": 1,
-                "crawlerType": "puppeteer",
                 "proxyConfiguration": {"useApifyProxy": True},
-                "pageFunction": """
-                    async function pageFunction(context) {
-                        const { request, page } = context;
-                        const title = await page.title();
-                        const h1 = await page.evaluate(() => {
-                            const h1Tag = document.querySelector('h1');
-                            return h1Tag ? h1Tag.innerText : '';
-                        });
-                        return {
-                            url: request.url,
-                            html: await page.content(),
-                            text: await page.evaluate(() => document.body.innerText),
-                            extractedTitle: h1 || title
-                        };
-                    }
-                """
+                "pageFunction": page_function_code
             },
             "build": "latest"
         }
@@ -200,7 +186,7 @@ def extract_with_apify(url):
             return {"error": "No run ID returned."}
 
         status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_TOKEN}"
-        for _ in range(60):  # Aumentado a 90s máximo
+        for _ in range(60):  # Espera hasta 90 segundos
             time.sleep(1.5)
             status_response = requests.get(status_url)
             status_data = status_response.json()
@@ -228,7 +214,7 @@ def extract_with_apify(url):
             content = item.get("text") or item.get("html") or item.get("markdown") or ""
             text_parts.append(content)
 
-            # 1. Extraer título directo desde extractedTitle si existe
+            # 1. Priorizar título extraído desde Apify
             job_title = item.get("extractedTitle", "")
             if job_title:
                 break
@@ -238,10 +224,8 @@ def extract_with_apify(url):
             if html_content:
                 soup = BeautifulSoup(html_content, "html.parser")
                 job_title_tag = soup.find("h1") or soup.find("title")
-
                 if not job_title_tag:
                     job_title_tag = soup.find("p", class_=lambda c: c and any("title" in cls.lower() for cls in c.split()))
-
                 if job_title_tag:
                     job_title = job_title_tag.get_text(strip=True)
                     break
@@ -249,16 +233,16 @@ def extract_with_apify(url):
         combined_text = " ".join(text_parts)
         cleaned_text = ' '.join(combined_text.split())[:10000]
 
-        # 3. Fallback en texto plano
+        # 3. Fallback en texto si no se encontró en HTML
         if not job_title and cleaned_text:
             lines = cleaned_text.splitlines()
-            for line in lines[:10]:
+            for line in lines[:10]:  # Solo primeras líneas
                 match = re.search(r"(?:Puesto|Vacante|Cargo|Tipo de puesto):\s*(.*)", line, re.IGNORECASE)
                 if match:
                     job_title = match.group(1).strip()
                     break
 
-        # Debug Logs (opcional)
+        # Logs de depuración si es necesario
         if os.getenv("DEBUG", "false").lower() == "true":
             print(f"Apify Run ID: {run_id}, Job Title: {job_title}, URL: {url}")
 
