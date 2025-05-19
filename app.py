@@ -150,14 +150,12 @@ def extract_with_apify(url):
         actor_id = "antoniovega.mkt~extract-vacante"  # Tu actor personalizado
         run_url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={APIFY_TOKEN}"
 
-        payload = {
-            "input": {
-                "startUrls": [{"url": url}],
-                "maxPagesPerCrawl": 1,
-                "proxyConfiguration": {"useApifyProxy": True}
-            },
-            "build": "latest"
-        }
+       payload = {
+    "input": {
+        "startUrls": [{"url": url}],
+        "maxPagesPerCrawl": 1
+    }
+}
 
         run_response = requests.post(run_url, json=payload)
         run_response.raise_for_status()
