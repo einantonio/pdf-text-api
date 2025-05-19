@@ -159,7 +159,7 @@ def extract_with_apify_route():
 
 def extract_with_apify(url):
     try:
-        task_id = "6hTBPhkVAV9z6wSlU"
+        task_id = "PF3D85f8rBdJo97Yq"
         run_url = f"https://api.apify.com/v2/actor-tasks/{task_id}/runs?token={APIFY_TOKEN}"
 
         payload = {
