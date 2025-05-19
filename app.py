@@ -106,7 +106,7 @@ import requests
 import re
 import os
 
-APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Asegúrate de usar tu token real
+APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Coloca tu token real
 
 app = Flask(__name__)
 CORS(app)
@@ -147,15 +147,15 @@ def extract_with_apify(url):
         if not APIFY_TOKEN or "apify_api_" not in APIFY_TOKEN:
             return {"error": "Apify token no válido o no configurado."}
 
-        actor_id = "antoniovega.mkt~extract-vacante"  # Tu actor personalizado
+        actor_id = "antoniovega.mkt~extract-vacante"
         run_url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={APIFY_TOKEN}"
 
-       payload = {
-    "input": {
-        "startUrls": [{"url": url}],
-        "maxPagesPerCrawl": 1
-    }
-}
+        payload = {
+            "input": {
+                "startUrls": [{"url": url}],
+                "maxPagesPerCrawl": 1
+            }
+        }
 
         run_response = requests.post(run_url, json=payload)
         run_response.raise_for_status()
@@ -194,12 +194,12 @@ def extract_with_apify(url):
             content = item.get("text") or item.get("html") or item.get("markdown") or ""
             text_parts.append(content)
 
-            # 1. Prioriza el título extraído desde el actor personalizado
+            # 1. Prioriza título extraído desde tu Actor
             job_title = item.get("job_title", "")
             if job_title:
                 break
 
-            # 2. Fallback: Buscar en HTML si no se encontró con job_title
+            # 2. Fallback a HTML si no se encontró en dataset
             html_content = item.get("html", "")
             if html_content:
                 soup = BeautifulSoup(html_content, "html.parser")
@@ -222,9 +222,6 @@ def extract_with_apify(url):
                     job_title = match.group(1).strip()
                     break
 
-        if os.getenv("DEBUG", "false").lower() == "true":
-            print(f"Apify Run ID: {run_id}, Job Title: {job_title}, URL: {url}")
-
         return {
             "text": cleaned_text,
             "job_title": job_title or "No especificado"
@@ -232,7 +229,6 @@ def extract_with_apify(url):
 
     except Exception as e:
         return {"error": f"Error al usar Apify: {str(e)}"}
-
 
 
 if __name__ == "__main__":
