@@ -205,7 +205,7 @@ def extract_with_apify(url):
                 
                 # 1. Buscamos según el dominio
                 if "occ.com.mx" in url:
-                    job_title_tag = soup.find("p", class_=lambda c: c and "title" in c.lower())
+                     job_title_tag = soup.find("p", class_=lambda c: c and any("title" in cls.lower() for cls in (c if isinstance(c, list) else c.split())))
                 elif "computrabajo.com" in url or "indeed.com" in url:
                     job_title_tag = soup.find("h1")
                 else:
