@@ -153,7 +153,11 @@ def extract_with_apify(url):
         payload = {
             "input": {
                 "startUrls": [
-                    { "url": url }
+                    {
+                        "requests": [
+                            { "url": url }
+                        ]
+                    }
                 ],
                 "maxPagesPerCrawl": 1,
                 "proxyConfiguration": { "useApifyProxy": True }
