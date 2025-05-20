@@ -9,6 +9,12 @@ from pdfminer.pdfparser import PDFSyntaxError
 import mammoth
 import PyPDF2
 from docx import Document
+#extraer vacante
+from bs4 import BeautifulSoup
+import time
+import requests
+import re
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -100,20 +106,8 @@ def extract_file():
         return jsonify({"error": str(e)}), 500
 
 #Extraccion de texto vacantes
-from bs4 import BeautifulSoup
-import time
-import requests
-import re
-import os
 
 APIFY_TOKEN = "apify_api_xGpnABpktLvk8UZK2Q5qLMK1LOLPBw2u5XHo"  # Coloca tu token real
-
-app = Flask(__name__)
-CORS(app)
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    return jsonify({"status": "ok"}), 200
 
 @app.route('/extract-job-text', methods=['POST'])
 def extract_job_text():
