@@ -160,8 +160,6 @@ payload = {
     },
     "build": "latest"
 }
-
-
         run_response = requests.post(run_url, json=payload)
         run_response.raise_for_status()
         run_data = run_response.json()
