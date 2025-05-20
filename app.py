@@ -147,22 +147,14 @@ def extract_with_apify(url):
         if not APIFY_TOKEN or "apify_api_" not in APIFY_TOKEN:
             return {"error": "Apify token no válido o no configurado."}
 
-        actor_id = "antoniovega.mkt~extract-vacante"
-        run_url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={APIFY_TOKEN}"
+        task_id = "0EUMhRKPGrYJav7cf"  # ID de tu Task en Apify
+        run_url = f"https://api.apify.com/v2/actor-tasks/{task_id}/runs?token={APIFY_TOKEN}"
 
         payload = {
-            "input": {
-                "startUrls": [
-                    {
-                        "requests": [
-                            { "url": url }
-                        ]
-                    }
-                ],
-                "maxPagesPerCrawl": 1,
-                "proxyConfiguration": { "useApifyProxy": True }
-            },
-            "build": "latest"
+            "startUrls": [
+                { "url": url }
+            ],
+            "maxPagesPerCrawl": 1
         }
 
         run_response = requests.post(run_url, json=payload)
@@ -173,8 +165,9 @@ def extract_with_apify(url):
         if not run_id:
             return {"error": "No run ID returned."}
 
+        # Polling hasta que finalice
         status_url = f"https://api.apify.com/v2/actor-runs/{run_id}?token={APIFY_TOKEN}"
-        for _ in range(60):
+        for _ in range(60):  # Hasta 90 segundos
             time.sleep(1.5)
             status_response = requests.get(status_url)
             status_data = status_response.json()
@@ -202,12 +195,10 @@ def extract_with_apify(url):
             content = item.get("text") or item.get("html") or item.get("markdown") or ""
             text_parts.append(content)
 
-            # 1. Prioriza título extraído desde tu Actor
             job_title = item.get("job_title", "")
             if job_title:
                 break
 
-            # 2. Fallback a HTML si no se encontró en dataset
             html_content = item.get("html", "")
             if html_content:
                 soup = BeautifulSoup(html_content, "html.parser")
@@ -221,7 +212,6 @@ def extract_with_apify(url):
         combined_text = " ".join(text_parts)
         cleaned_text = ' '.join(combined_text.split())[:10000]
 
-        # 3. Fallback en texto si no se encontró en HTML
         if not job_title and cleaned_text:
             lines = cleaned_text.splitlines()
             for line in lines[:10]:
