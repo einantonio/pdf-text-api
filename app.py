@@ -153,14 +153,12 @@ def extract_with_apify(url):
         payload = {
     "input": {
         "startUrls": [
-            {
-                "requests": [
-                    {"url": url}  # Aquí va la variable con la URL dinámica
-                ]
-            }
+            { "requests": [{ "url": url }] }
         ],
-        "maxPagesPerCrawl": 1
-    }
+        "maxPagesPerCrawl": 1,
+        "proxyConfiguration": { "useApifyProxy": True }
+    },
+    "build": "latest"
 }
 
         run_response = requests.post(run_url, json=payload)
