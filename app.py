@@ -202,9 +202,16 @@ def extract_with_apify(url):
             html_content = item.get("html", "")
             if html_content:
                 soup = BeautifulSoup(html_content, "html.parser")
-                job_title_tag = soup.find("h1") or soup.find("title")
-                if not job_title_tag:
-                    job_title_tag = soup.find("p", class_=lambda c: c and any("title" in cls.lower() for cls in c.split()))
+                
+                # 1. Buscamos según el dominio
+                if "occ.com.mx" in url:
+                    job_title_tag = soup.find("p", class_=lambda c: c and "title" in c.lower())
+                elif "computrabajo.com" in url or "indeed.com" in url:
+                    job_title_tag = soup.find("h1")
+                else:
+                    # Fallback genérico
+                    job_title_tag = soup.find("h1") or soup.find("title")
+                
                 if job_title_tag:
                     job_title = job_title_tag.get_text(strip=True)
                     break
